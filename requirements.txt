@@ -1,0 +1,9 @@
+pre-commit
+black
+pandas
+numpy
+scikit-learn
+matplotlib
+plotly
+tqdm
+requests
