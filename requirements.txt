@@ -7,3 +7,11 @@ matplotlib
 plotly
 tqdm
 requests
+ipywidgets
+catboost
+seaborn 
+mlflow 
+apache-airflow
+dvc 
+jupyter
+xgboost
