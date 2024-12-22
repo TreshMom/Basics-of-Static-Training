@@ -7,6 +7,9 @@ from datetime import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.impute import SimpleImputer
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve, confusion_matrix
+import seaborn as sns
 
 log_file = '/Users/pahan/Desktop/Basics-of-Static-Training/reports/titanic_log.txt'
 logging.basicConfig(
@@ -44,21 +47,17 @@ def transform_data(**context):
 def train_model(**context):
     logging.info("Training model...")
 
-    # Извлечение данных
     train_data, test_data, gender_submission_data = context['ti'].xcom_pull(task_ids='transform_data')
 
-    # Преобразование категориальных данных
     train_data['Sex'] = train_data['Sex'].map({'male': 0, 'female': 1})
     test_data['Sex'] = test_data['Sex'].map({'male': 0, 'female': 1})
 
     train_data['Embarked'] = train_data['Embarked'].map({'C': 0, 'Q': 1, 'S': 2})
     test_data['Embarked'] = test_data['Embarked'].map({'C': 0, 'Q': 1, 'S': 2})
 
-    # Формирование признаков
     X_train = train_data[['Pclass', 'Age', 'Fare', 'Sex', 'Embarked']]
     X_test = test_data[['Pclass', 'Age', 'Fare', 'Sex', 'Embarked']]
 
-    # Заполнение пропущенных значений
     imputer = SimpleImputer(strategy='mean')
     X_train = imputer.fit_transform(X_train)
     X_test = imputer.transform(X_test)
@@ -66,22 +65,59 @@ def train_model(**context):
     y_train = train_data['Survived']
     y_test = gender_submission_data['Survived']  # Используем данные из gender_submission_data
 
-    # Создание и обучение модели
     model = LogisticRegression(max_iter=200)  # Определяем модель
     model.fit(X_train, y_train)
 
-    # Предсказания и вычисление точности
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    logging.info(f"Model accuracy: {accuracy:.4f}")
+    y_prob = model.predict_proba(X_test)[:, 1]  # Для ROC-кривой
 
-    # Сохранение модели
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    roc_auc = roc_auc_score(y_test, y_prob)
+
+    logging.info(f"Model accuracy: {accuracy:.4f}")
+    logging.info(f"Precision: {precision:.4f}")
+    logging.info(f"Recall: {recall:.4f}")
+    logging.info(f"F1-score: {f1:.4f}")
+    logging.info(f"ROC AUC: {roc_auc:.4f}")
+
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Survived', 'Not Survived'], yticklabels=['Survived', 'Not Survived'])
+    plt.title('Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    confusion_matrix_filename = '/Users/pahan/Desktop/Basics-of-Static-Training/reports/confusion_matrix.png'
+    plt.savefig(confusion_matrix_filename)
+    logging.info(f"Confusion matrix saved to {confusion_matrix_filename}")
+
+    fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='blue', label=f'AUC = {roc_auc:.4f}')
+    plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+    plt.title('ROC Curve')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    roc_curve_filename = '/Users/pahan/Desktop/Basics-of-Static-Training/reports/roc_curve.png'
+    plt.savefig(roc_curve_filename)
+    logging.info(f"ROC curve saved to {roc_curve_filename}")
+
     model_filename = '/Users/pahan/Desktop/Basics-of-Static-Training/reports/titanic_model.pkl'
     joblib.dump(model, model_filename)
     logging.info(f"Model saved to {model_filename}")
 
-    # Сохранение пути к модели и точности через XCom
-    return {'model_path': model_filename, 'accuracy': accuracy}
+    return {
+        'model_path': model_filename,
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'roc_auc': roc_auc,
+        'confusion_matrix': confusion_matrix_filename,
+        'roc_curve': roc_curve_filename
+    }
 
 
 def load_model():
